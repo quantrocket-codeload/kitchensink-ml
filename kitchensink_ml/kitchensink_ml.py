@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import pandas as pd
 from moonshot import MoonshotML
 from moonshot.commission import PerShareCommission
 from quantrocket.fundamental import get_sharadar_fundamentals_reindexed_like
