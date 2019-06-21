@@ -16,7 +16,7 @@ import pandas as pd
 from moonshot import MoonshotML
 from moonshot.commission import PerShareCommission
 from quantrocket.fundamental import get_sharadar_fundamentals_reindexed_like
-from quantrocket.history import get_historical_prices
+from quantrocket import get_prices
 from quantrocket.master import get_securities_reindexed_like
 
 class USStockCommission(PerShareCommission):
@@ -49,7 +49,7 @@ class TheKitchenSinkML(MoonshotML):
         self.add_fundamental_features(prices, features)
         print("adding quality features")
         self.add_quality_features(prices, features)
-        
+
         print("adding price and volume features")
         self.add_price_and_volume_features(prices, features)
         print("adding techical indicator features")
@@ -68,7 +68,7 @@ class TheKitchenSinkML(MoonshotML):
     def add_fundamental_features(self, prices, features):
         """
         Fundamental features:
-        
+
         - Enterprise multiple
         - various quarterly values and ratios
         - various trailing-twelve month values and ratios
@@ -87,7 +87,7 @@ class TheKitchenSinkML(MoonshotML):
         # Ignore negative earnings
         enterprise_multiples = enterprise_multiples.where(ebits > 0)
         features["enterprise_multiples_ranks"] = enterprise_multiples.rank(axis=1, pct=True).fillna(0.5)
-        
+
         # Query quarterly fundamentals
         fundamentals = get_sharadar_fundamentals_reindexed_like(
             closes,
@@ -207,7 +207,7 @@ class TheKitchenSinkML(MoonshotML):
         have_increasing_gross_margins = gross_margins > previous_gross_margins
         have_increasing_asset_turnovers = asset_turnovers > previous_asset_turnovers
 
-        # Save each boolean F score component as a feature 
+        # Save each boolean F score component as a feature
         features["have_positive_return_on_assets"] = have_positive_return_on_assets.astype(int)
         features["have_positive_operating_cash_flows"] = have_positive_operating_cash_flows.astype(int)
         features["have_increasing_return_on_assets"] = have_increasing_return_on_assets.astype(int)
@@ -235,7 +235,7 @@ class TheKitchenSinkML(MoonshotML):
     def add_price_and_volume_features(self, prices, features):
         """
         Price and volume features, or features derived from price and volume:
-        
+
         - return ranks
         - price level
         - dollar volume rank
@@ -244,7 +244,7 @@ class TheKitchenSinkML(MoonshotML):
         - volume spikes
         """
         closes = prices.loc["Close"]
-        
+
         # yearly, monthly, weekly, 2-day, daily returns ranks
         one_year_returns = (closes.shift(22) - closes.shift(252)) / closes.shift(252) # exclude most recent month, per classic momentum
         one_month_returns = (closes - closes.shift(22)) / closes.shift(22)
@@ -256,23 +256,23 @@ class TheKitchenSinkML(MoonshotML):
         features["1wk_returns_ranks"] = one_week_returns.rank(axis=1, pct=True).fillna(0.5)
         features["2d_returns_ranks"] = two_day_returns.rank(axis=1, pct=True).fillna(0.5)
         features["1d_returns_ranks"] = one_day_returns.rank(axis=1, pct=True).fillna(0.5)
-        
+
         # whether returns were positive
         features["last_1year_was_positive"] = (one_year_returns > 0).astype(int)
         features["last_1month_was_positive"] = (one_month_returns > 0).astype(int)
         features["last_1week_was_positive"] = (one_week_returns > 0).astype(int)
         features["last_2day_was_positive"] = (two_day_returns > 0).astype(int)
         features["last_1day_was_positive"] = (one_day_returns > 0).astype(int)
-        
+
         # price level
         features["price_below_10"] = closes < 10
         features["price_below_2"] = closes < 2
-        
+
         # dollar volume ranks
         volumes = prices.loc["Volume"]
         avg_dollar_volumes = (closes * volumes).rolling(63).mean()
         features["dollar_volume_ranks"] = avg_dollar_volumes.rank(axis=1, ascending=True, pct=True).fillna(0.5)
-        
+
         # quarterly volatility ranks
         quarterly_stds = closes.pct_change().rolling(window=63).std()
         features["quaterly_std_ranks"] = quarterly_stds.rank(axis=1, pct=True).fillna(0.5)
@@ -291,7 +291,7 @@ class TheKitchenSinkML(MoonshotML):
     def add_technical_indicator_features(self, prices, features):
         """
         Various technical indicators:
-        
+
         - Bollinger bands
         - RSI
         - Stochastic oscillator
@@ -330,7 +330,7 @@ class TheKitchenSinkML(MoonshotML):
     def add_securities_master_features(self, prices, features):
         """
         Features from the securities master:
-        
+
         - ADR?
         - sector
         """
@@ -361,9 +361,9 @@ class TheKitchenSinkML(MoonshotML):
         - Hindenburg Omen
         """
         closes = prices.loc["Close"]
-        
+
         # Get prices for SPY, VIX, TRIN-NYSE
-        market_prices = get_historical_prices(self.BENCHMARK_DB,
+        market_prices = get_prices(self.BENCHMARK_DB,
                                               fields="Close",
                                               start_date=closes.index.min(),
                                               end_date=closes.index.max())
@@ -454,8 +454,8 @@ class TheKitchenSinkML(MoonshotML):
         have_best_predictions = predictions.where(have_adequate_dollar_volumes).rank(ascending=False, axis=1) <= 10
         have_worst_predictions = predictions.where(have_adequate_dollar_volumes).rank(ascending=True, axis=1) <= 10
         signals = have_best_predictions.astype(int).where(have_best_predictions, -have_worst_predictions.astype(int).where(have_worst_predictions, 0))
-        return signals 
-    
+        return signals
+
     def signals_to_target_weights(self, signals, prices):
         # Allocate equal weights
         daily_signal_counts = signals.abs().sum(axis=1)
@@ -467,7 +467,7 @@ class TheKitchenSinkML(MoonshotML):
         weights = weights.resample("W").first()
         # Reindex back to daily and fill forward
         weights = weights.reindex(prices.loc["Close"].index, method="ffill")
-        
+
         return weights
 
     def target_weights_to_positions(self, weights, prices):
@@ -475,8 +475,7 @@ class TheKitchenSinkML(MoonshotML):
         return weights.shift()
 
     def positions_to_gross_returns(self, positions, prices):
-        
+
         closes = prices.loc["Close"]
         gross_returns = closes.pct_change() * positions.shift()
         return gross_returns
-        
