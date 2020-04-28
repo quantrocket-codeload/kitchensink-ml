@@ -20,19 +20,18 @@ from quantrocket import get_prices
 from quantrocket.master import get_securities_reindexed_like
 
 class USStockCommission(PerShareCommission):
-    IB_COMMISSION_PER_SHARE = 0.005
+    BROKER_COMMISSION_PER_SHARE = 0.005
 
 class TheKitchenSinkML(MoonshotML):
 
     CODE = "kitchensink-ml"
-    DB = "sharadar-1d"
+    DB = "sharadar-us-stk-1d"
     DB_FIELDS = ["Close", "Volume"]
-    UNIVERSES = "usa-stk"
     BENCHMARK_DB = "market-1d"
-    SPY_CONID = 756733
-    VIX_CONID = 13455763
-    TRIN_CONID = 26718743
-    BENCHMARK = SPY_CONID
+    SPY_SID = "FIBBG000BDTBL9"
+    VIX_SID = "IB13455763"
+    TRIN_SID = "IB26718743"
+    BENCHMARK = SPY_SID
     DOLLAR_VOLUME_TOP_N_PCT = 60
     DOLLAR_VOLUME_WINDOW = 90
     MODEL = None
@@ -80,8 +79,7 @@ class TheKitchenSinkML(MoonshotML):
         fundamentals = get_sharadar_fundamentals_reindexed_like(
             closes,
             fields=["EVEBIT", "EBIT"],
-            dimension="ART",
-            domain="sharadar")
+            dimension="ART")
         enterprise_multiples = fundamentals.loc["EVEBIT"]
         ebits = fundamentals.loc["EBIT"]
         # Ignore negative earnings
@@ -91,7 +89,6 @@ class TheKitchenSinkML(MoonshotML):
         # Query quarterly fundamentals
         fundamentals = get_sharadar_fundamentals_reindexed_like(
             closes,
-            domain="sharadar",
             dimension="ARQ", # As-reported quarterly reports
             fields=[
                 "CURRENTRATIO", # Current ratio
@@ -107,7 +104,6 @@ class TheKitchenSinkML(MoonshotML):
         # Query trailing-twelve-month fundamentals
         fundamentals = get_sharadar_fundamentals_reindexed_like(
             closes,
-            domain="sharadar",
             dimension="ART", # As-reported trailing-twelve-month reports
             fields=[
                 "ASSETTURNOVER", # Asset Turnover
@@ -137,7 +133,6 @@ class TheKitchenSinkML(MoonshotML):
         # Step 1: query relevant indicators
         fundamentals = get_sharadar_fundamentals_reindexed_like(
             closes,
-            domain="sharadar",
             dimension="ART", # As-reported TTM reports
             fields=[
                "ROA", # Return on assets
@@ -165,7 +160,6 @@ class TheKitchenSinkML(MoonshotML):
         # period
         fundamentals = get_sharadar_fundamentals_reindexed_like(
             closes,
-            domain="sharadar",
             dimension="ARQ", # As-reported quarterly reports
             fields=[
                "REPORTPERIOD"
@@ -175,16 +169,16 @@ class TheKitchenSinkML(MoonshotML):
 
         periods_ago = 4
 
-        # this function will be applied conid by conid and returns a Series of
+        # this function will be applied sid by sid and returns a Series of
         # earlier fundamentals
-        def n_periods_ago(fundamentals_for_conid):
-            conid = fundamentals_for_conid.name
+        def n_periods_ago(fundamentals_for_sid):
+            sid = fundamentals_for_sid.name
             # remove all rows except for new fiscal periods
-            new_period_fundamentals = fundamentals_for_conid.where(are_new_fiscal_periods[conid]).dropna()
+            new_period_fundamentals = fundamentals_for_sid.where(are_new_fiscal_periods[sid]).dropna()
             # Shift the desired number of periods
             earlier_fundamentals = new_period_fundamentals.shift(periods_ago)
             # Reindex and forward-fill to restore original shape
-            earlier_fundamentals = earlier_fundamentals.reindex(fundamentals_for_conid.index, method="ffill")
+            earlier_fundamentals = earlier_fundamentals.reindex(fundamentals_for_sid.index, method="ffill")
             return earlier_fundamentals
 
         previous_return_on_assets = return_on_assets.apply(n_periods_ago)
@@ -336,16 +330,16 @@ class TheKitchenSinkML(MoonshotML):
         """
         closes = prices.loc["Close"]
 
-        securities = get_securities_reindexed_like(closes, domain="sharadar", fields=["Category", "Sector"])
+        securities = get_securities_reindexed_like(closes, fields=["sharadar_Category", "sharadar_Sector"])
 
         # Is it an ADR?
-        categories = securities.loc["Category"]
+        categories = securities.loc["sharadar_Category"]
         unique_categories = categories.iloc[0].unique()
         # this dataset includes several ADR classifications, all of which start with "ADR "
         features["are_adrs"] = categories.isin([cat for cat in unique_categories if cat.startswith("ADR ")]).astype(int)
 
         # Which sector? (sectors must be one-hot encoded - see usage guide for more)
-        sectors = securities.loc["Sector"]
+        sectors = securities.loc["sharadar_Sector"]
         for sector in sectors.stack().unique():
             features["sector_{}".format(sector)] = (sectors == sector).astype(int)
 
@@ -364,13 +358,13 @@ class TheKitchenSinkML(MoonshotML):
 
         # Get prices for SPY, VIX, TRIN-NYSE
         market_prices = get_prices(self.BENCHMARK_DB,
-                                              fields="Close",
-                                              start_date=closes.index.min(),
-                                              end_date=closes.index.max())
+                                   fields="Close",
+                                   start_date=closes.index.min(),
+                                   end_date=closes.index.max())
         market_closes = market_prices.loc["Close"]
 
         # Is S&P above its 200-day?
-        spy_closes = market_closes[self.SPY_CONID]
+        spy_closes = market_closes[self.SPY_SID]
         spy_200d_mavg = spy_closes.rolling(200).mean()
         spy_above_200d = (spy_closes > spy_200d_mavg).astype(int)
         # Must reindex like closes in case indexes differ
@@ -382,7 +376,7 @@ class TheKitchenSinkML(MoonshotML):
 
         # Where does VIX fall within the range of 12-30?
         try:
-            vix = market_closes[self.VIX_CONID]
+            vix = market_closes[self.VIX_SID]
         except KeyError:
             features["vix"] = fillers
         else:
@@ -396,7 +390,7 @@ class TheKitchenSinkML(MoonshotML):
 
         # Where does NYSE TRIN fall within the range of 0.5-2?
         try:
-            trin = market_closes[self.TRIN_CONID]
+            trin = market_closes[self.TRIN_SID]
         except KeyError:
             features["trin"] = fillers
         else:
