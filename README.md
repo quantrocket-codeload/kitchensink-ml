@@ -1,6 +1,6 @@
 # kitchensink-ml
 
-Machine learning strategy that trains the model using "everything and the kitchen sink": fundamentals, technical indicators, returns, price levels, volume and volatility spikes, liquidity, market breadth, and more. Runs in Moonshot. Utilizes data from Sharadar and IB.
+Machine learning strategy that trains the model using "everything and the kitchen sink": fundamentals, technical indicators, returns, price levels, volume and volatility spikes, liquidity, market breadth, and more. Runs in Moonshot.
 
 ## Clone in QuantRocket
 
