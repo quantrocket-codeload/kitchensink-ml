@@ -38,7 +38,7 @@ class TheKitchenSinkML(MoonshotML):
     LOOKBACK_WINDOW = 252
     COMMISSION_CLASS = USStockCommission
 
-    def prices_to_features(self, prices):
+    def prices_to_features(self, prices: pd.DataFrame):
 
         closes = prices.loc["Close"]
 
@@ -64,7 +64,7 @@ class TheKitchenSinkML(MoonshotML):
 
         return features, targets
 
-    def add_fundamental_features(self, prices, features):
+    def add_fundamental_features(self, prices: pd.DataFrame, features: dict[str, pd.DataFrame]):
         """
         Fundamental features:
 
@@ -124,7 +124,7 @@ class TheKitchenSinkML(MoonshotML):
         for field in fundamentals.index.get_level_values("Field").unique():
             features["{}_ranks".format(field)] = fundamentals.loc[field].rank(axis=1, pct=True).fillna(0.5)
 
-    def add_quality_features(self, prices, features):
+    def add_quality_features(self, prices: pd.DataFrame, features: dict[str, pd.DataFrame]):
         """
         Adds quality features, based on the Piotroski F-score.
         """
@@ -226,7 +226,7 @@ class TheKitchenSinkML(MoonshotML):
         )
         features["f_score_ranks"] = f_scores.rank(axis=1, pct=True).fillna(0.5)
 
-    def add_price_and_volume_features(self, prices, features):
+    def add_price_and_volume_features(self, prices: pd.DataFrame, features: dict[str, pd.DataFrame]):
         """
         Price and volume features, or features derived from price and volume:
 
@@ -282,7 +282,7 @@ class TheKitchenSinkML(MoonshotML):
         features["2x_volume_spike"] = (volume_1d_vs_quarter >= 2).astype(int)
         features["volume_spike_ranks"] = volume_1d_vs_quarter.rank(axis=1, pct=True).fillna(0.5)
 
-    def add_technical_indicator_features(self, prices, features):
+    def add_technical_indicator_features(self, prices: pd.DataFrame, features: dict[str, pd.DataFrame]):
         """
         Various technical indicators:
 
@@ -321,7 +321,7 @@ class TheKitchenSinkML(MoonshotML):
         money_flow_ratios = positive_money_flows / negative_money_flows.where(negative_money_flows > 0)
         features["money_flow"] = 1 - (1 / (1 + money_flow_ratios.fillna(0.5)))
 
-    def add_securities_master_features(self, prices, features):
+    def add_securities_master_features(self, prices: pd.DataFrame, features: dict[str, pd.DataFrame]):
         """
         Features from the securities master:
 
@@ -343,7 +343,7 @@ class TheKitchenSinkML(MoonshotML):
         for sector in sectors.stack().unique():
             features["sector_{}".format(sector)] = (sectors == sector).astype(int)
 
-    def add_market_features(self, prices, features):
+    def add_market_features(self, prices: pd.DataFrame, features: dict[str, pd.DataFrame]):
         """
         Market price, volatility, and breadth, some of which are queried from a
         database and some of which are calculated from the Sharadar data:
@@ -432,7 +432,7 @@ class TheKitchenSinkML(MoonshotML):
         hindenburg_omens = hindenburg_omens.reindex(closes.index, method="ffill")
         features["hindenburg_omens"] = closes.apply(lambda x: hindenburg_omens)
 
-    def predictions_to_signals(self, predictions, prices):
+    def predictions_to_signals(self, predictions: pd.DataFrame, prices: pd.DataFrame):
         closes = prices.loc["Close"]
         volumes = prices.loc["Volume"]
         avg_dollar_volumes = (closes * volumes).rolling(self.DOLLAR_VOLUME_WINDOW).mean()
@@ -450,7 +450,7 @@ class TheKitchenSinkML(MoonshotML):
         signals = have_best_predictions.astype(int).where(have_best_predictions, -have_worst_predictions.astype(int).where(have_worst_predictions, 0))
         return signals
 
-    def signals_to_target_weights(self, signals, prices):
+    def signals_to_target_weights(self, signals: pd.DataFrame, prices: pd.DataFrame):
         # Allocate equal weights
         daily_signal_counts = signals.abs().sum(axis=1)
         weights = signals.div(daily_signal_counts, axis=0).fillna(0)
@@ -464,11 +464,11 @@ class TheKitchenSinkML(MoonshotML):
 
         return weights
 
-    def target_weights_to_positions(self, weights, prices):
+    def target_weights_to_positions(self, weights: pd.DataFrame, prices: pd.DataFrame):
         # Enter the position the day after the signal
         return weights.shift()
 
-    def positions_to_gross_returns(self, positions, prices):
+    def positions_to_gross_returns(self, positions: pd.DataFrame, prices: pd.DataFrame):
 
         closes = prices.loc["Close"]
         gross_returns = closes.pct_change() * positions.shift()
