@@ -300,7 +300,7 @@ class TheKitchenSinkML(MoonshotML):
         lower_bands = mavgs - (stds * 2)
         # Winsorize at upper and lower bands
         winsorized_closes = closes.where(closes > lower_bands, lower_bands).where(closes < upper_bands, upper_bands)
-        features["close_vs_bbands"] = (winsorized_closes - lower_bands) / (winsorized_closes - lower_bands)
+        features["close_vs_bbands"] = (winsorized_closes - lower_bands) / (upper_bands - lower_bands)
 
         # RSI (0-1)
         returns = closes.diff()
