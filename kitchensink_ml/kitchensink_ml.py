@@ -334,7 +334,7 @@ class TheKitchenSinkML(MoonshotML):
 
         # Is it an ADR?
         categories = securities.loc["sharadar_Category"]
-        unique_categories = categories.iloc[0].unique()
+        unique_categories = categories.iloc[0].fillna('').unique()
         # this dataset includes several ADR classifications, all of which start with "ADR "
         features["are_adrs"] = categories.isin([cat for cat in unique_categories if cat.startswith("ADR ")]).astype(int)
 
